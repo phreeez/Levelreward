@@ -1,6 +1,6 @@
 --[[
 levelup_reward.lua
-AzerothCore + ELA
+AzerothCore + ALE
 
 Features
 - On every level-up: 1 random equippable item matching the player's class
