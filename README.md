@@ -24,7 +24,7 @@ A Lua script for **AzerothCore** with **Eluna Lua Engine** that rewards players 
 ## Requirements
 
 - [AzerothCore](https://www.azerothcore.org/)
-- [Eluna Lua Engine](https://github.com/ElunaLuaEngine/Eluna) (ELA module for AzerothCore)
+- [mod-ale](https://github.com/azerothcore/mod-ale) (Azerothcore Lua Engine module)
 
 ---
 
