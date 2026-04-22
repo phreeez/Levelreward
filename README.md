@@ -34,10 +34,11 @@ A Lua script for **AzerothCore** with **Eluna Lua Engine** that rewards players 
    ```
    lua_scripts/levelreward/levelreward.lua
    ```
-2. Restart your Worldserver 
+2. Reload Eluna in-game (no server restart needed):
    ```
-   
+   .eluna reload
    ```
+   Or do a full worldserver restart if you prefer.
 3. You should see the following message in your server console on load:
    ```
    [LevelReward] Loaded
@@ -91,21 +92,15 @@ On the very first level-up, the script teaches the player every weapon trainer s
 
 ### Drop Rates
 
-Edit `rollPrimaryQuality()` near the top of the file:
+Edit the two variables at the very top of the file:
 
 ```lua
-local function rollPrimaryQuality()
-    local r = math.random(1, 100)
-    if r <= 10 then
-        return 4 -- purple (epic)   → 10%
-    elseif r <= 35 then
-        return 3 -- blue (rare)     → 25%
-    end
-    return 2     -- green (uncommon) → 65%
-end
+LevelReward_Chance_Purple = 10  -- % chance for Epic   (purple)
+LevelReward_Chance_Blue   = 25  -- % chance for Rare   (blue)
+                                -- Uncommon (green) fills the rest automatically
 ```
 
-Adjust the thresholds to change the rates. The numbers must stay within 1–100.
+Green always fills whatever percentage is left over, so the three tiers always sum to 100% automatically. Make sure `Purple + Blue` does not exceed 100.
 
 ### Item Name Blacklist
 
