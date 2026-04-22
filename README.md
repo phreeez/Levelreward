@@ -141,3 +141,4 @@ All WotLK playable classes are supported:
 - Death Knights start at level 55 and already have their weapon proficiencies — the first level-up skill grant does not apply to them
 - Items with any reputation, skill, spell, or honor rank requirements are excluded
 - The script uses a double-load guard (`_G.LevelRewardLoaded`) so it is safe to hot-reload without registering duplicate event handlers
+- This script has **not** been tested on Eluna — it is developed and tested exclusively with [mod-ale](https://github.com/azerothcore/mod-ale)
