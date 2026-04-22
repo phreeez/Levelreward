@@ -137,8 +137,8 @@ local WEAPONS_BY_CLASS = {
              WEP_POLEARM, WEP_SWORD_1H, WEP_SWORD_2H },                -- Death Knight
     [7]  = { WEP_AXE_1H, WEP_AXE_2H, WEP_MACE_1H, WEP_MACE_2H,
              WEP_STAFF, WEP_FIST, WEP_DAGGER },                        -- Shaman
-    [8]  = { WEP_STAFF, WEP_DAGGER, WEP_WAND },                        -- Mage
-    [9]  = { WEP_STAFF, WEP_DAGGER, WEP_WAND },                        -- Warlock
+    [8]  = { WEP_SWORD_1H, WEP_STAFF, WEP_DAGGER, WEP_WAND },           -- Mage
+    [9]  = { WEP_SWORD_1H, WEP_STAFF, WEP_DAGGER, WEP_WAND },           -- Warlock
     [11] = { WEP_MACE_1H, WEP_MACE_2H, WEP_POLEARM, WEP_STAFF,
              WEP_FIST, WEP_DAGGER },                                   -- Druid
 }
@@ -162,8 +162,8 @@ local TRAINER_SPELLS_BY_CLASS = {
              SPELL_POLEARMS, SPELL_SWORDS_1H, SPELL_SWORDS_2H },       -- Death Knight
     [7]  = { SPELL_AXES_1H, SPELL_AXES_2H, SPELL_MACES_1H, SPELL_MACES_2H,
              SPELL_STAVES, SPELL_FIST_WEAPONS, SPELL_DAGGERS },        -- Shaman
-    [8]  = { SPELL_STAVES, SPELL_DAGGERS, SPELL_WANDS },               -- Mage
-    [9]  = { SPELL_STAVES, SPELL_DAGGERS, SPELL_WANDS },               -- Warlock
+    [8]  = { SPELL_SWORDS_1H, SPELL_STAVES, SPELL_DAGGERS, SPELL_WANDS }, -- Mage
+    [9]  = { SPELL_SWORDS_1H, SPELL_STAVES, SPELL_DAGGERS, SPELL_WANDS }, -- Warlock
     [11] = { SPELL_MACES_1H, SPELL_MACES_2H, SPELL_POLEARMS, SPELL_STAVES,
              SPELL_FIST_WEAPONS, SPELL_DAGGERS },                      -- Druid
 }
