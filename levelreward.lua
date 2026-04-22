@@ -227,6 +227,52 @@ local NAME_BLACKLIST_SQL = (function()
     return table.concat(parts, "\n        ")
 end)()
 
+-- Pre-computed WHERE clause templates per class (one per armor bracket).
+-- All class-specific parts are baked in at load time; only RequiredLevel
+-- remains as a runtime placeholder so buildBaseWhereClause is a single format call.
+local WHERE_TEMPLATE = {}
+do
+    local function makeTemplate(armorCsv, weaponCsv, statsCsv, classMask)
+        return string.format([[
+        RequiredLevel = %%d
+        AND InventoryType IN (%s)
+        AND (
+            (class = %d AND subclass IN (%s)
+             AND (stat_type1 IN (%s) OR stat_type2 IN (%s) OR stat_type3 IN (%s) OR stat_type4 IN (%s) OR stat_type5 IN (%s) OR stat_type6 IN (%s) OR stat_type7 IN (%s) OR stat_type8 IN (%s) OR stat_type9 IN (%s) OR stat_type10 IN (%s)))
+            OR
+            (class = %d AND subclass IN (%s))
+        )
+        AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
+        AND requiredspell = 0
+        AND RequiredSkill = 0
+        AND RequiredSkillRank = 0
+        AND requiredhonorrank = 0
+        AND RequiredReputationFaction = 0
+        AND RequiredReputationRank = 0
+        %s
+    ]],
+            INV_CSV,
+            ITEM_CLASS_ARMOR, armorCsv,
+            statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
+            statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
+            ITEM_CLASS_WEAPON, weaponCsv,
+            classMask, NAME_BLACKLIST_SQL
+        )
+    end
+
+    for classId in pairs(CLASS_MASK) do
+        local armorEntry = ARMOR_BY_CLASS[classId] or { lo = { ARMOR_MISC } }
+        local weaponCsv  = tableToCsv(WEAPONS_BY_CLASS[classId] or {})
+        local statsCsv   = tableToCsv(STATS_BY_CLASS[classId]   or { STAT_STAMINA })
+        local mask       = CLASS_MASK[classId]
+
+        WHERE_TEMPLATE[classId] = {
+            lo = makeTemplate(tableToCsv(armorEntry.lo), weaponCsv, statsCsv, mask),
+            hi = armorEntry.hi and makeTemplate(tableToCsv(armorEntry.hi), weaponCsv, statsCsv, mask),
+        }
+    end
+end
+
 -- ============================================================
 --  CORE LOGIC
 -- ============================================================
@@ -255,42 +301,11 @@ local function teachFirstLevelupWeaponSkills(player)
     end
 end
 
--- Returns the quality-independent WHERE clause for item_template lookups.
--- Quality is intentionally excluded so one call serves both the GROUP BY and SELECT queries.
+-- All class-specific parts are pre-baked into WHERE_TEMPLATE at load time.
+-- At runtime only RequiredLevel is substituted, reducing 14 format calls to 1.
 local function buildBaseWhereClause(classId, level)
-    local armorEntry = ARMOR_BY_CLASS[classId] or { lo = { ARMOR_MISC } }
-    local armorCsv   = tableToCsv((level >= 40 and armorEntry.hi) or armorEntry.lo)
-    local weaponCsv  = tableToCsv(WEAPONS_BY_CLASS[classId] or {})
-    local statsCsv   = tableToCsv(STATS_BY_CLASS[classId]   or { STAT_STAMINA })
-    local classMask  = CLASS_MASK[classId] or 0
-
-    -- Armor requires at least one matching stat; weapons match on subclass alone
-    -- so damage-only weapons without bonus stats are not incorrectly excluded.
-    return string.format([[
-        RequiredLevel = %d
-        AND InventoryType IN (%s)
-        AND (
-            (class = %d AND subclass IN (%s)
-             AND (stat_type1 IN (%s) OR stat_type2 IN (%s) OR stat_type3 IN (%s) OR stat_type4 IN (%s) OR stat_type5 IN (%s) OR stat_type6 IN (%s) OR stat_type7 IN (%s) OR stat_type8 IN (%s) OR stat_type9 IN (%s) OR stat_type10 IN (%s)))
-            OR
-            (class = %d AND subclass IN (%s))
-        )
-        AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
-        AND requiredspell = 0
-        AND RequiredSkill = 0
-        AND RequiredSkillRank = 0
-        AND requiredhonorrank = 0
-        AND RequiredReputationFaction = 0
-        AND RequiredReputationRank = 0
-        %s
-    ]],
-        level, INV_CSV,
-        ITEM_CLASS_ARMOR, armorCsv,
-        statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
-        statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
-        ITEM_CLASS_WEAPON, weaponCsv,
-        classMask, NAME_BLACKLIST_SQL
-    )
+    local entry = WHERE_TEMPLATE[classId]
+    return string.format((level >= 40 and entry.hi) or entry.lo, level)
 end
 
 local function getRewardForPlayer(player)
