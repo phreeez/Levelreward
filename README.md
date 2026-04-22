@@ -1,6 +1,6 @@
 # LevelReward
 
-A Lua script for **AzerothCore** with **Eluna Lua Engine** that rewards players with a random, class-appropriate equippable item on every level-up.
+A Lua script for **AzerothCore** with **mod-ale (Azerothcore Lua Engine module)** that rewards players with a random, class-appropriate equippable item on every level-up.
 
 ---
 
