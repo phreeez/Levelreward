@@ -34,9 +34,9 @@ A Lua script for **AzerothCore** with **Eluna Lua Engine** that rewards players 
    ```
    lua_scripts/levelreward/levelreward.lua
    ```
-2. Restart your server or reload Lua scripts with:
+2. Restart your Worldserver 
    ```
-   .reload eluna
+   
    ```
 3. You should see the following message in your server console on load:
    ```
