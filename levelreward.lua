@@ -3,18 +3,19 @@ levelup_reward.lua
 AzerothCore + ELA
 
 Features
-- Bei jedem Level-Up: 1 zufälliges passendes equipbares Item
-- 85% Green / 15% Blue
-- Falls kein grünes/blaues Item für genau das neue Level existiert:
-    -> 1 weißes passendes Item
-- Falls gar nichts existiert:
-    -> nur Nachricht
-- Beim ERSTEN Level-Up (1 -> 2):
-    -> lernt der Spieler alle klassenpassenden Weapon Trainer Skills
-- Blacklist gegen Test-/Placeholder-/Dev-Items
+- On every level-up: 1 random equippable item matching the player's class
+- 65% Green / 25% Blue / 10% Purple (Epic)
+- Fallback chain: Purple -> Blue -> Green -> White
+- If no green/blue/purple item exists for exactly the new level:
+    -> 1 white item matching the player's class
+- If nothing exists at all:
+    -> message only
+- On the FIRST level-up (1 -> 2):
+    -> player learns all class-appropriate weapon trainer proficiencies
+- Blacklist filters out test/placeholder/dev items
 
-Hinweis:
-- "Erster Level-Up" = oldLevel == 1 und newLevel == 2
+Note:
+- "First level-up" = oldLevel == 1 and newLevel == 2
 ]]
 
 if _G.LevelRewardLoaded then
@@ -115,7 +116,7 @@ local STAT_STAMINA   = 5
 local STAT_INTELLECT = 6
 local STAT_SPIRIT    = 7
 
--- Itemnamen, die nicht als Reward auftauchen sollen
+-- Item names that must never appear as rewards
 local NAME_BLACKLIST = {
     "TEST",
     "Test",
@@ -129,6 +130,7 @@ local NAME_BLACKLIST = {
 }
 
 local function tableToCsv(tbl)
+    if #tbl == 0 then return "NULL" end
     local out = {}
     for i = 1, #tbl do
         out[#out + 1] = tostring(tbl[i])
@@ -137,15 +139,17 @@ local function tableToCsv(tbl)
 end
 
 local function getClassMask(classId)
-    return 2 ^ (classId - 1)
+    return math.floor(2 ^ (classId - 1))
 end
 
 local function rollPrimaryQuality()
     local r = math.random(1, 100)
-    if r <= 85 then
-        return 2 -- green
+    if r <= 10 then
+        return 4 -- purple (epic)
+    elseif r <= 35 then
+        return 3 -- blue (rare)
     end
-    return 3 -- blue
+    return 2 -- green (uncommon)
 end
 
 local function qualityText(quality)
@@ -155,6 +159,8 @@ local function qualityText(quality)
         return "|cff1eff00[Green]|r"
     elseif quality == 3 then
         return "|cff0070dd[Blue]|r"
+    elseif quality == 4 then
+        return "|cffa335ee[Purple]|r"
     end
     return "|cff9d9d9d[Unknown]|r"
 end
@@ -164,8 +170,12 @@ local function buildNameBlacklistSql()
     for i = 1, #NAME_BLACKLIST do
         parts[#parts + 1] = "AND name NOT LIKE '%%" .. NAME_BLACKLIST[i] .. "%%'"
     end
-    return table.concat(parts, "\n            ")
+    return table.concat(parts, "\n        ")
 end
+
+-- Pre-computed once at load time; these never change at runtime
+local INV_CSV            = tableToCsv(EQUIPPABLE_INVENTORY_TYPES)
+local NAME_BLACKLIST_SQL = buildNameBlacklistSql()
 
 local function getArmorSubclassesForPlayer(classId, level)
     if classId == CLASS_WARRIOR then
@@ -230,7 +240,7 @@ local function getWeaponSubclassesForPlayer(classId)
     elseif classId == CLASS_PALADIN then
         return {
             WEP_AXE_1H, WEP_AXE_2H, WEP_MACE_1H, WEP_MACE_2H,
-            WEP_POLEARM, WEP_SWORD_1H, WEP_SWORD_2H, WEP_STAFF
+            WEP_POLEARM, WEP_SWORD_1H, WEP_SWORD_2H
         }
 
     elseif classId == CLASS_HUNTER then
@@ -405,84 +415,128 @@ local function teachFirstLevelupWeaponSkills(player)
     end
 end
 
-local function buildRewardQuery(classId, level, quality)
-    local classMask = getClassMask(classId)
-    local armorCsv = tableToCsv(getArmorSubclassesForPlayer(classId, level))
-    local weaponCsv = tableToCsv(getWeaponSubclassesForPlayer(classId))
-    local invCsv = tableToCsv(EQUIPPABLE_INVENTORY_TYPES)
-    local blacklistSql = buildNameBlacklistSql()
+local function getStatsForPlayer(classId)
+    if classId == CLASS_WARRIOR then
+        return { STAT_STRENGTH, STAT_STAMINA }
 
-    local sql = string.format([[
-        SELECT entry, name, Quality
-        FROM item_template
-        WHERE
-            Quality = %d
-            AND RequiredLevel = %d
-            AND InventoryType IN (%s)
-            AND (
-                (class = %d AND subclass IN (%s))
-                OR
-                (class = %d AND subclass IN (%s))
-            )
-            AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
-            AND requiredspell = 0
-            AND RequiredSkill = 0
-            AND RequiredSkillRank = 0
-            AND requiredhonorrank = 0
-            AND RequiredReputationFaction = 0
-            AND RequiredReputationRank = 0
-            %s
-        ORDER BY RAND()
-        LIMIT 1;
-    ]],
-        quality,
-        level,
-        invCsv,
-        ITEM_CLASS_ARMOR, armorCsv,
-        ITEM_CLASS_WEAPON, weaponCsv,
-        classMask,
-        blacklistSql
-    )
+    elseif classId == CLASS_PALADIN then
+        return { STAT_STRENGTH, STAT_INTELLECT, STAT_STAMINA }
 
-    return sql
-end
+    elseif classId == CLASS_HUNTER then
+        return { STAT_AGILITY, STAT_INTELLECT, STAT_SPIRIT, STAT_STAMINA }
 
-local function querySingleItem(classId, level, quality)
-    local result = WorldDBQuery(buildRewardQuery(classId, level, quality))
-    if not result then
-        return nil
+    elseif classId == CLASS_ROGUE then
+        return { STAT_AGILITY, STAT_STAMINA }
+
+    elseif classId == CLASS_PRIEST then
+        return { STAT_INTELLECT, STAT_SPIRIT, STAT_STAMINA }
+
+    elseif classId == CLASS_DEATH_KNIGHT then
+        return { STAT_STRENGTH, STAT_STAMINA }
+
+    elseif classId == CLASS_SHAMAN then
+        return { STAT_AGILITY, STAT_INTELLECT, STAT_SPIRIT, STAT_STAMINA }
+
+    elseif classId == CLASS_MAGE then
+        return { STAT_INTELLECT, STAT_SPIRIT }
+
+    elseif classId == CLASS_WARLOCK then
+        return { STAT_INTELLECT, STAT_SPIRIT }
+
+    elseif classId == CLASS_DRUID then
+        return { STAT_AGILITY, STAT_INTELLECT, STAT_SPIRIT, STAT_STAMINA }
     end
 
-    return {
-        entry = result:GetUInt32(0),
-        name = result:GetString(1),
-        quality = result:GetUInt32(2)
-    }
+    return { STAT_STAMINA }
+end
+
+-- Returns the quality-independent WHERE clause for item_template lookups.
+-- Quality is intentionally excluded so one call can serve the GROUP BY count query.
+local function buildBaseWhereClause(classId, level)
+    local classMask = getClassMask(classId)
+    local armorCsv  = tableToCsv(getArmorSubclassesForPlayer(classId, level))
+    local weaponCsv = tableToCsv(getWeaponSubclassesForPlayer(classId))
+    local statsCsv  = tableToCsv(getStatsForPlayer(classId))
+
+    -- Armor requires at least one matching stat; weapons match on subclass alone
+    -- so damage-only weapons without bonus stats are not incorrectly excluded.
+    return string.format([[
+        RequiredLevel = %d
+        AND InventoryType IN (%s)
+        AND (
+            (class = %d AND subclass IN (%s)
+             AND (stat_type1 IN (%s) OR stat_type2 IN (%s) OR stat_type3 IN (%s) OR stat_type4 IN (%s) OR stat_type5 IN (%s) OR stat_type6 IN (%s) OR stat_type7 IN (%s) OR stat_type8 IN (%s) OR stat_type9 IN (%s) OR stat_type10 IN (%s)))
+            OR
+            (class = %d AND subclass IN (%s))
+        )
+        AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
+        AND requiredspell = 0
+        AND RequiredSkill = 0
+        AND RequiredSkillRank = 0
+        AND requiredhonorrank = 0
+        AND RequiredReputationFaction = 0
+        AND RequiredReputationRank = 0
+        %s
+    ]],
+        level,
+        INV_CSV,
+        ITEM_CLASS_ARMOR, armorCsv,
+        statsCsv, statsCsv, statsCsv, statsCsv, statsCsv, statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
+        ITEM_CLASS_WEAPON, weaponCsv,
+        classMask,
+        NAME_BLACKLIST_SQL
+    )
 end
 
 local function getRewardForPlayer(player)
-    local classId = player:GetClass()
-    local level = player:GetLevel()
+    local classId   = player:GetClass()
+    local level     = player:GetLevel()
+    local baseWhere = buildBaseWhereClause(classId, level)
 
-    local primaryQuality = rollPrimaryQuality()
+    -- Single GROUP BY query to get available item counts for all qualities at once.
+    -- Replaces up to 3 separate COUNT queries from the previous approach.
+    local countResult = WorldDBQuery(string.format(
+        "SELECT Quality, COUNT(*) FROM item_template WHERE %s AND Quality IN (1,2,3,4) GROUP BY Quality",
+        baseWhere
+    ))
 
-    local item = querySingleItem(classId, level, primaryQuality)
-    if item then
-        return item
+    local counts = { [1] = 0, [2] = 0, [3] = 0, [4] = 0 }
+    if countResult then
+        repeat
+            local q = countResult:GetUInt32(0)
+            local c = countResult:GetUInt32(1)
+            if counts[q] then counts[q] = c end
+        until not countResult:NextRow()
     end
 
-    local secondaryQuality = (primaryQuality == 2) and 3 or 2
-    item = querySingleItem(classId, level, secondaryQuality)
-    if item then
-        return item
+    -- Pick quality: prefer the rolled tier, fall back downward only (never upgrade).
+    -- Chain: purple -> blue -> green -> white
+    local rolled = rollPrimaryQuality()
+    local targetQuality
+    if counts[rolled] > 0 then
+        targetQuality = rolled
+    elseif rolled >= 3 and counts[3] > 0 then
+        targetQuality = 3
+    elseif counts[2] > 0 then
+        targetQuality = 2
+    elseif counts[1] > 0 then
+        targetQuality = 1
     end
 
-    item = querySingleItem(classId, level, 1)
-    if item then
-        return item
-    end
+    if not targetQuality then return nil end
 
-    return nil
+    local offset = math.random(0, counts[targetQuality] - 1)
+    local result = WorldDBQuery(string.format(
+        "SELECT entry, name, Quality FROM item_template WHERE %s AND Quality = %d LIMIT 1 OFFSET %d",
+        baseWhere, targetQuality, offset
+    ))
+    if not result then return nil end
+
+    return {
+        entry   = result:GetUInt32(0),
+        name    = result:GetString(1),
+        quality = result:GetUInt32(2)
+    }
 end
 
 local function addRewardItem(player, reward)
@@ -513,7 +567,7 @@ local function OnLevelChange(event, player, oldLevel)
         return
     end
 
-    -- Erstes Level-Up: Weapon Trainer Skills lernen
+    -- First level-up: teach all class weapon proficiencies
     if oldLevel == 1 and newLevel == 2 then
         teachFirstLevelupWeaponSkills(player)
     end
