@@ -34,11 +34,7 @@ A Lua script for **AzerothCore** with **Eluna Lua Engine** that rewards players 
    ```
    lua_scripts/levelreward/levelreward.lua
    ```
-2. Reload Eluna in-game (no server restart needed):
-   ```
-   .eluna reload
-   ```
-   Or do a full worldserver restart if you prefer.
+2. Restart your worldserver to load the script.
 3. You should see the following message in your server console on load:
    ```
    [LevelReward] Loaded
