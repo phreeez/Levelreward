@@ -23,6 +23,16 @@ if _G.LevelRewardLoaded then
 end
 _G.LevelRewardLoaded = true
 
+-- ============================================================
+--  CONFIGURATION
+-- ============================================================
+LevelReward_Enable        = 1   -- 1 = enabled, 0 = disabled
+
+LevelReward_Chance_Purple = 10  -- % chance for Epic   (purple)
+LevelReward_Chance_Blue   = 25  -- % chance for Rare   (blue)
+                                -- Uncommon (green) fills the rest automatically
+-- ============================================================
+
 math.randomseed(os.time())
 
 local PLAYER_EVENT_ON_LEVEL_CHANGE = 13
@@ -144,9 +154,9 @@ end
 
 local function rollPrimaryQuality()
     local r = math.random(1, 100)
-    if r <= 10 then
+    if r <= LevelReward_Chance_Purple then
         return 4 -- purple (epic)
-    elseif r <= 35 then
+    elseif r <= LevelReward_Chance_Purple + LevelReward_Chance_Blue then
         return 3 -- blue (rare)
     end
     return 2 -- green (uncommon)
@@ -558,6 +568,7 @@ local function addRewardItem(player, reward)
 end
 
 local function OnLevelChange(event, player, oldLevel)
+    if LevelReward_Enable ~= 1 then return end
     if not player then
         return
     end
