@@ -123,7 +123,7 @@ local ARMOR_BY_CLASS = {
 -- Equippable weapon subclasses per class
 local WEAPONS_BY_CLASS = {
     [1]  = { WEP_AXE_1H, WEP_AXE_2H, WEP_MACE_1H, WEP_MACE_2H, WEP_POLEARM,
-             WEP_SWORD_1H, WEP_SWORD_2H, WEP_STAFF, WEP_FIST, WEP_DAGGER,
+             WEP_SWORD_1H, WEP_SWORD_2H, WEP_FIST, WEP_DAGGER,
              WEP_THROWN, WEP_SPEAR, WEP_BOW, WEP_GUN, WEP_CROSSBOW },  -- Warrior
     [2]  = { WEP_AXE_1H, WEP_AXE_2H, WEP_MACE_1H, WEP_MACE_2H,
              WEP_POLEARM, WEP_SWORD_1H, WEP_SWORD_2H },                -- Paladin
@@ -134,7 +134,7 @@ local WEAPONS_BY_CLASS = {
              WEP_DAGGER, WEP_THROWN, WEP_BOW, WEP_GUN, WEP_CROSSBOW }, -- Rogue
     [5]  = { WEP_MACE_1H, WEP_STAFF, WEP_DAGGER, WEP_WAND },          -- Priest
     [6]  = { WEP_AXE_1H, WEP_AXE_2H, WEP_MACE_1H, WEP_MACE_2H,
-             WEP_POLEARM, WEP_SWORD_1H, WEP_SWORD_2H, WEP_DAGGER },   -- Death Knight
+             WEP_POLEARM, WEP_SWORD_1H, WEP_SWORD_2H },                -- Death Knight
     [7]  = { WEP_AXE_1H, WEP_AXE_2H, WEP_MACE_1H, WEP_MACE_2H,
              WEP_STAFF, WEP_FIST, WEP_DAGGER },                        -- Shaman
     [8]  = { WEP_STAFF, WEP_DAGGER, WEP_WAND },                        -- Mage
@@ -146,7 +146,7 @@ local WEAPONS_BY_CLASS = {
 -- Weapon trainer proficiency spell IDs per class
 local TRAINER_SPELLS_BY_CLASS = {
     [1]  = { SPELL_AXES_1H, SPELL_AXES_2H, SPELL_MACES_1H, SPELL_MACES_2H,
-             SPELL_POLEARMS, SPELL_SWORDS_1H, SPELL_SWORDS_2H, SPELL_STAVES,
+             SPELL_POLEARMS, SPELL_SWORDS_1H, SPELL_SWORDS_2H,
              SPELL_FIST_WEAPONS, SPELL_DAGGERS, SPELL_THROWN,
              SPELL_BOWS, SPELL_GUNS, SPELL_CROSSBOWS },                -- Warrior
     [2]  = { SPELL_AXES_1H, SPELL_AXES_2H, SPELL_MACES_1H, SPELL_MACES_2H,
