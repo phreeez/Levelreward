@@ -382,7 +382,7 @@ end
 local function getRewardForPlayer(player)
     local classId  = player:GetClass()
     local level    = player:GetLevel()
-    local raceMask = FACTION_MASK[player:GetTeamId()] or (FACTION_MASK[0] + FACTION_MASK[1])
+    local raceMask = FACTION_MASK[player:GetTeam()] or (FACTION_MASK[0] + FACTION_MASK[1])
     local tpl      = WHERE_TEMPLATE[classId]
 
     local armorWhere  = string.format((level >= 40 and tpl.armor.hi) or tpl.armor.lo, level, raceMask)
