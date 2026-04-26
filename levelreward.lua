@@ -360,24 +360,39 @@ local function teachFirstLevelupWeaponSkills(player)
 end
 
 -- Queries one item type (armor or weapon) for the given WHERE clause.
+-- Selects a random SLOT first (equal weight per slot), then rolls quality
+-- within that slot. This prevents common slots (chest, legs) from drowning
+-- out rare slots (shoulders, wrists) in the item pool.
 -- Returns { entry, name, quality } or nil if no items exist.
 local function queryRewardFromWhere(whereClause)
-    local countResult = WorldDBQuery(string.format(
-        "SELECT Quality, COUNT(*) FROM item_template WHERE %s AND Quality IN (1,2,3,4) GROUP BY Quality",
+    -- One query: get per-slot per-quality counts for all available items
+    local rows = WorldDBQuery(string.format(
+        "SELECT InventoryType, Quality, COUNT(*) FROM item_template WHERE %s AND Quality IN (1,2,3,4) GROUP BY InventoryType, Quality",
         whereClause
     ))
+    if not rows then return nil end
 
-    local counts = { [1] = 0, [2] = 0, [3] = 0, [4] = 0 }
-    if countResult then
-        repeat
-            local q = countResult:GetUInt32(0)
-            if counts[q] then counts[q] = countResult:GetUInt32(1) end
-        until not countResult:NextRow()
-    end
+    -- Build slot -> quality -> count map, and a flat slot list for random pick
+    local slotMap  = {}
+    local slotList = {}
+    repeat
+        local inv = rows:GetUInt32(0)
+        local q   = rows:GetUInt32(1)
+        local cnt = rows:GetUInt32(2)
+        if not slotMap[inv] then
+            slotMap[inv] = { [1]=0, [2]=0, [3]=0, [4]=0 }
+            slotList[#slotList + 1] = inv
+        end
+        slotMap[inv][q] = cnt
+    until not rows:NextRow()
 
-    if counts[1] + counts[2] + counts[3] + counts[4] == 0 then return nil end
+    if #slotList == 0 then return nil end
 
-    -- Pick quality: prefer rolled tier, fall back downward only (never upgrade)
+    -- Pick a random slot with equal probability
+    local chosenSlot = slotList[math.random(1, #slotList)]
+    local counts     = slotMap[chosenSlot]
+
+    -- Roll quality for the chosen slot; fall back downward only
     local rolled = rollPrimaryQuality()
     local target
     if     counts[rolled] > 0             then target = rolled
@@ -388,8 +403,8 @@ local function queryRewardFromWhere(whereClause)
     if not target then return nil end
 
     local result = WorldDBQuery(string.format(
-        "SELECT entry, name, Quality FROM item_template WHERE %s AND Quality = %d LIMIT 1 OFFSET %d",
-        whereClause, target, math.random(0, counts[target] - 1)
+        "SELECT entry, name, Quality FROM item_template WHERE %s AND Quality = %d AND InventoryType = %d LIMIT 1 OFFSET %d",
+        whereClause, target, chosenSlot, math.random(0, counts[target] - 1)
     ))
     if not result then return nil end
 
