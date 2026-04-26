@@ -103,6 +103,14 @@ local CLASS_MASK = {
     [9]  = 256,  [11] = 1024,
 }
 
+-- AllowableRace bitmask per race ID (2 ^ (raceId - 1))
+-- 1=Human 2=Orc 3=Dwarf 4=NightElf 5=Undead 6=Tauren 7=Gnome 8=Troll 10=BloodElf 11=Draenei
+local RACE_MASK = {
+    [1]  = 1,    [2]  = 2,    [3]  = 4,    [4]  = 8,
+    [5]  = 16,   [6]  = 32,   [7]  = 64,   [8]  = 128,
+    [10] = 512,  [11] = 1024,
+}
+
 -- Armor subclasses per class. `hi` is used at level >= 40; falls back to `lo`.
 local ARMOR_BY_CLASS = {
     [1]  = { lo = { ARMOR_MISC, ARMOR_MAIL,    ARMOR_SHIELD },
@@ -242,8 +250,8 @@ local NAME_BLACKLIST_SQL = (function()
 end)()
 
 -- Pre-computed WHERE clause templates per class, split into armor and weapon.
--- RequiredLevel remains as a runtime placeholder (%d); all other class-specific
--- parts are baked in at load time.
+-- Two runtime placeholders: RequiredLevel (%d arg 1), AllowableRace mask (%d arg 2).
+-- All other class-specific parts are baked in at load time.
 local WHERE_TEMPLATE = {}
 do
     local function makeArmorTemplate(armorCsv, statsCsv, classMask)
@@ -253,6 +261,7 @@ do
         AND class = %d AND subclass IN (%s)
         AND (stat_type1 IN (%s) OR stat_type2 IN (%s) OR stat_type3 IN (%s) OR stat_type4 IN (%s) OR stat_type5 IN (%s) OR stat_type6 IN (%s) OR stat_type7 IN (%s) OR stat_type8 IN (%s) OR stat_type9 IN (%s) OR stat_type10 IN (%s))
         AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
+        AND (AllowableRace  = -1 OR AllowableRace  = 32767 OR (AllowableRace  & %%d) <> 0)
         AND requiredspell = 0
         AND RequiredSkill = 0
         AND RequiredSkillRank = 0
@@ -275,6 +284,7 @@ do
         AND InventoryType IN (%s)
         AND class = %d AND subclass IN (%s)
         AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
+        AND (AllowableRace  = -1 OR AllowableRace  = 32767 OR (AllowableRace  & %%d) <> 0)
         AND requiredspell = 0
         AND RequiredSkill = 0
         AND RequiredSkillRank = 0
@@ -371,12 +381,13 @@ local function queryRewardFromWhere(whereClause)
 end
 
 local function getRewardForPlayer(player)
-    local classId = player:GetClass()
-    local level   = player:GetLevel()
-    local tpl     = WHERE_TEMPLATE[classId]
+    local classId  = player:GetClass()
+    local level    = player:GetLevel()
+    local raceMask = RACE_MASK[player:GetRace()] or 0
+    local tpl      = WHERE_TEMPLATE[classId]
 
-    local armorWhere  = string.format((level >= 40 and tpl.armor.hi) or tpl.armor.lo, level)
-    local weaponWhere = string.format(tpl.weapon, level)
+    local armorWhere  = string.format((level >= 40 and tpl.armor.hi) or tpl.armor.lo, level, raceMask)
+    local weaponWhere = string.format(tpl.weapon, level, raceMask)
 
     -- Roll item type: LevelReward_Chance_Weapon% weapon, rest = armor
     if math.random(1, 100) <= LevelReward_Chance_Weapon then
