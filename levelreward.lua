@@ -253,12 +253,20 @@ end)()
 -- All other class-specific parts are baked in at load time.
 local WHERE_TEMPLATE = {}
 do
-    local function makeArmorTemplate(armorCsv, statsCsv, classMask)
+    -- armorCsvNoMisc: class-appropriate armor subclasses WITHOUT ARMOR_MISC (0).
+    -- Real armor pieces (cloth/leather/mail/plate/shield) need no stat filter —
+    -- the subclass already ensures the right armor type for the class.
+    -- ARMOR_MISC (subclass=0, jewelry/cloak/trinket) gets the stat filter so a
+    -- warrior never receives a pure-INT ring.
+    local function makeArmorTemplate(armorCsvNoMisc, statsCsv, classMask)
         return string.format([[
         RequiredLevel = %%d
         AND InventoryType IN (%s)
-        AND class = %d AND subclass IN (%s)
-        AND (stat_type1 IN (%s) OR stat_type2 IN (%s) OR stat_type3 IN (%s) OR stat_type4 IN (%s) OR stat_type5 IN (%s) OR stat_type6 IN (%s) OR stat_type7 IN (%s) OR stat_type8 IN (%s) OR stat_type9 IN (%s) OR stat_type10 IN (%s))
+        AND class = %d
+        AND (
+            subclass IN (%s)
+            OR (subclass = 0 AND (stat_type1 IN (%s) OR stat_type2 IN (%s) OR stat_type3 IN (%s) OR stat_type4 IN (%s) OR stat_type5 IN (%s) OR stat_type6 IN (%s) OR stat_type7 IN (%s) OR stat_type8 IN (%s) OR stat_type9 IN (%s) OR stat_type10 IN (%s)))
+        )
         AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
         AND (AllowableRace  = -1 OR AllowableRace  = 32767 OR (AllowableRace  & %%d) <> 0)
         AND requiredspell = 0
@@ -270,11 +278,20 @@ do
         %s
     ]],
             INV_CSV,
-            ITEM_CLASS_ARMOR, armorCsv,
+            ITEM_CLASS_ARMOR,
+            armorCsvNoMisc,
             statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
             statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
             classMask, NAME_BLACKLIST_SQL
         )
+    end
+
+    local function filterMisc(list)
+        local out = {}
+        for _, v in ipairs(list) do
+            if v ~= ARMOR_MISC then out[#out + 1] = v end
+        end
+        return out
     end
 
     local function makeWeaponTemplate(weaponCsv, classMask)
@@ -306,8 +323,8 @@ do
 
         WHERE_TEMPLATE[classId] = {
             armor = {
-                lo = makeArmorTemplate(tableToCsv(armorEntry.lo), statsCsv, mask),
-                hi = armorEntry.hi and makeArmorTemplate(tableToCsv(armorEntry.hi), statsCsv, mask),
+                lo = makeArmorTemplate(tableToCsv(filterMisc(armorEntry.lo)), statsCsv, mask),
+                hi = armorEntry.hi and makeArmorTemplate(tableToCsv(filterMisc(armorEntry.hi)), statsCsv, mask),
             },
             weapon = makeWeaponTemplate(weaponCsv, mask),
         }
