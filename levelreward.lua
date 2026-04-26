@@ -103,12 +103,23 @@ local CLASS_MASK = {
     [9]  = 256,  [11] = 1024,
 }
 
--- AllowableRace bitmask per race ID (2 ^ (raceId - 1))
--- 1=Human 2=Orc 3=Dwarf 4=NightElf 5=Undead 6=Tauren 7=Gnome 8=Troll 10=BloodElf 11=Draenei
-local RACE_MASK = {
-    [1]  = 1,    [2]  = 2,    [3]  = 4,    [4]  = 8,
-    [5]  = 16,   [6]  = 32,   [7]  = 64,   [8]  = 128,
-    [10] = 512,  [11] = 1024,
+-- Combined AllowableRace bitmask for each faction.
+-- Using faction mask instead of per-race mask so a Horde player of any race
+-- can receive items restricted to any Horde race (and never Alliance-only items).
+local ALLIANCE_RACE_MASK = 1 + 4 + 8 + 64 + 1024   -- Human|Dwarf|NightElf|Gnome|Draenei
+local HORDE_RACE_MASK    = 2 + 16 + 32 + 128 + 512  -- Orc|Undead|Tauren|Troll|BloodElf
+
+local FACTION_RACE_MASK = {
+    [1]  = ALLIANCE_RACE_MASK,  -- Human
+    [3]  = ALLIANCE_RACE_MASK,  -- Dwarf
+    [4]  = ALLIANCE_RACE_MASK,  -- Night Elf
+    [7]  = ALLIANCE_RACE_MASK,  -- Gnome
+    [11] = ALLIANCE_RACE_MASK,  -- Draenei
+    [2]  = HORDE_RACE_MASK,     -- Orc
+    [5]  = HORDE_RACE_MASK,     -- Undead
+    [6]  = HORDE_RACE_MASK,     -- Tauren
+    [8]  = HORDE_RACE_MASK,     -- Troll
+    [10] = HORDE_RACE_MASK,     -- Blood Elf
 }
 
 -- Armor subclasses per class. `hi` is used at level >= 40; falls back to `lo`.
@@ -383,7 +394,7 @@ end
 local function getRewardForPlayer(player)
     local classId  = player:GetClass()
     local level    = player:GetLevel()
-    local raceMask = RACE_MASK[player:GetRace()] or 0
+    local raceMask = FACTION_RACE_MASK[player:GetRace()] or (ALLIANCE_RACE_MASK + HORDE_RACE_MASK)
     local tpl      = WHERE_TEMPLATE[classId]
 
     local armorWhere  = string.format((level >= 40 and tpl.armor.hi) or tpl.armor.lo, level, raceMask)
