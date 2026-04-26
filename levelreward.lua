@@ -4,12 +4,12 @@ AzerothCore + ALE
 
 Features
 - On every level-up: 1 random equippable item matching the player's class
+                     +1 Prestige Token stored in account_prestige (db_characters)
 - 65% Green / 25% Blue / 10% Purple (Epic)
 - Fallback chain: Purple -> Blue -> Green -> White
-- If no green/blue/purple item exists for exactly the new level:
-    -> 1 white item matching the player's class
-- If nothing exists at all:
-    -> message only
+- Item type: LevelReward_Chance_Weapon% weapon, rest = armor
+  Falls back to the other type if the rolled type yields no items at that level.
+- If no equippable item exists at all: message only
 - On the FIRST level-up (1 -> 2):
     -> player learns all class-appropriate weapon trainer proficiencies
 - Blacklist filters out test/placeholder/dev items
@@ -31,6 +31,7 @@ LevelReward_Enable        = 1   -- 1 = enabled, 0 = disabled
 LevelReward_Chance_Purple = 10  -- % chance for Epic   (purple)
 LevelReward_Chance_Blue   = 25  -- % chance for Rare   (blue)
                                 -- Uncommon (green) fills the rest automatically
+LevelReward_Chance_Weapon = 30  -- % chance reward is a weapon (70% = armor/misc)
 -- ============================================================
 
 math.randomseed(os.time())
@@ -227,21 +228,17 @@ local NAME_BLACKLIST_SQL = (function()
     return table.concat(parts, "\n        ")
 end)()
 
--- Pre-computed WHERE clause templates per class (one per armor bracket).
--- All class-specific parts are baked in at load time; only RequiredLevel
--- remains as a runtime placeholder so buildBaseWhereClause is a single format call.
+-- Pre-computed WHERE clause templates per class, split into armor and weapon.
+-- RequiredLevel remains as a runtime placeholder (%d); all other class-specific
+-- parts are baked in at load time.
 local WHERE_TEMPLATE = {}
 do
-    local function makeTemplate(armorCsv, weaponCsv, statsCsv, classMask)
+    local function makeArmorTemplate(armorCsv, statsCsv, classMask)
         return string.format([[
         RequiredLevel = %%d
         AND InventoryType IN (%s)
-        AND (
-            (class = %d AND subclass IN (%s)
-             AND (stat_type1 IN (%s) OR stat_type2 IN (%s) OR stat_type3 IN (%s) OR stat_type4 IN (%s) OR stat_type5 IN (%s) OR stat_type6 IN (%s) OR stat_type7 IN (%s) OR stat_type8 IN (%s) OR stat_type9 IN (%s) OR stat_type10 IN (%s)))
-            OR
-            (class = %d AND subclass IN (%s))
-        )
+        AND class = %d AND subclass IN (%s)
+        AND (stat_type1 IN (%s) OR stat_type2 IN (%s) OR stat_type3 IN (%s) OR stat_type4 IN (%s) OR stat_type5 IN (%s) OR stat_type6 IN (%s) OR stat_type7 IN (%s) OR stat_type8 IN (%s) OR stat_type9 IN (%s) OR stat_type10 IN (%s))
         AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
         AND requiredspell = 0
         AND RequiredSkill = 0
@@ -255,6 +252,25 @@ do
             ITEM_CLASS_ARMOR, armorCsv,
             statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
             statsCsv, statsCsv, statsCsv, statsCsv, statsCsv,
+            classMask, NAME_BLACKLIST_SQL
+        )
+    end
+
+    local function makeWeaponTemplate(weaponCsv, classMask)
+        return string.format([[
+        RequiredLevel = %%d
+        AND InventoryType IN (%s)
+        AND class = %d AND subclass IN (%s)
+        AND (AllowableClass = -1 OR AllowableClass = 32767 OR (AllowableClass & %d) <> 0)
+        AND requiredspell = 0
+        AND RequiredSkill = 0
+        AND RequiredSkillRank = 0
+        AND requiredhonorrank = 0
+        AND RequiredReputationFaction = 0
+        AND RequiredReputationRank = 0
+        %s
+    ]],
+            INV_CSV,
             ITEM_CLASS_WEAPON, weaponCsv,
             classMask, NAME_BLACKLIST_SQL
         )
@@ -267,8 +283,11 @@ do
         local mask       = CLASS_MASK[classId]
 
         WHERE_TEMPLATE[classId] = {
-            lo = makeTemplate(tableToCsv(armorEntry.lo), weaponCsv, statsCsv, mask),
-            hi = armorEntry.hi and makeTemplate(tableToCsv(armorEntry.hi), weaponCsv, statsCsv, mask),
+            armor = {
+                lo = makeArmorTemplate(tableToCsv(armorEntry.lo), statsCsv, mask),
+                hi = armorEntry.hi and makeArmorTemplate(tableToCsv(armorEntry.hi), statsCsv, mask),
+            },
+            weapon = makeWeaponTemplate(weaponCsv, mask),
         }
     end
 end
@@ -301,20 +320,12 @@ local function teachFirstLevelupWeaponSkills(player)
     end
 end
 
--- All class-specific parts are pre-baked into WHERE_TEMPLATE at load time.
--- At runtime only RequiredLevel is substituted, reducing 14 format calls to 1.
-local function buildBaseWhereClause(classId, level)
-    local entry = WHERE_TEMPLATE[classId]
-    return string.format((level >= 40 and entry.hi) or entry.lo, level)
-end
-
-local function getRewardForPlayer(player)
-    local baseWhere = buildBaseWhereClause(player:GetClass(), player:GetLevel())
-
-    -- One GROUP BY query to get item counts for all quality tiers at once
+-- Queries one item type (armor or weapon) for the given WHERE clause.
+-- Returns { entry, name, quality } or nil if no items exist.
+local function queryRewardFromWhere(whereClause)
     local countResult = WorldDBQuery(string.format(
         "SELECT Quality, COUNT(*) FROM item_template WHERE %s AND Quality IN (1,2,3,4) GROUP BY Quality",
-        baseWhere
+        whereClause
     ))
 
     local counts = { [1] = 0, [2] = 0, [3] = 0, [4] = 0 }
@@ -325,25 +336,41 @@ local function getRewardForPlayer(player)
         until not countResult:NextRow()
     end
 
+    if counts[1] + counts[2] + counts[3] + counts[4] == 0 then return nil end
+
     -- Pick quality: prefer rolled tier, fall back downward only (never upgrade)
-    -- Chain: purple -> blue -> green -> white
     local rolled = rollPrimaryQuality()
     local target
-    if     counts[rolled] > 0              then target = rolled
+    if     counts[rolled] > 0             then target = rolled
     elseif rolled >= 3 and counts[3] > 0  then target = 3
     elseif counts[2] > 0                  then target = 2
     elseif counts[1] > 0                  then target = 1
     end
-
     if not target then return nil end
 
     local result = WorldDBQuery(string.format(
         "SELECT entry, name, Quality FROM item_template WHERE %s AND Quality = %d LIMIT 1 OFFSET %d",
-        baseWhere, target, math.random(0, counts[target] - 1)
+        whereClause, target, math.random(0, counts[target] - 1)
     ))
     if not result then return nil end
 
     return { entry = result:GetUInt32(0), name = result:GetString(1), quality = result:GetUInt32(2) }
+end
+
+local function getRewardForPlayer(player)
+    local classId = player:GetClass()
+    local level   = player:GetLevel()
+    local tpl     = WHERE_TEMPLATE[classId]
+
+    local armorWhere  = string.format((level >= 40 and tpl.armor.hi) or tpl.armor.lo, level)
+    local weaponWhere = string.format(tpl.weapon, level)
+
+    -- Roll item type: LevelReward_Chance_Weapon% weapon, rest = armor
+    if math.random(1, 100) <= LevelReward_Chance_Weapon then
+        return queryRewardFromWhere(weaponWhere) or queryRewardFromWhere(armorWhere)
+    else
+        return queryRewardFromWhere(armorWhere) or queryRewardFromWhere(weaponWhere)
+    end
 end
 
 local function addRewardItem(player, reward)
@@ -351,6 +378,14 @@ local function addRewardItem(player, reward)
     if not item then return false end
     local link = item:GetItemLink() or reward.name or ("Item #" .. tostring(reward.entry))
     return true, link
+end
+
+-- Grants +1 prestige token per level-up into account_prestige (db_characters).
+local function addPrestigeTokenOnLevelUp(accountId)
+    CharDBExecute(string.format(
+        "INSERT INTO account_prestige (account_id, prestige_tokens) VALUES (%d, 1) "
+        .. "ON DUPLICATE KEY UPDATE prestige_tokens = prestige_tokens + 1",
+        accountId))
 end
 
 local function OnLevelChange(event, player, oldLevel)
@@ -363,6 +398,10 @@ local function OnLevelChange(event, player, oldLevel)
     if oldLevel == 1 and newLevel == 2 then
         teachFirstLevelupWeaponSkills(player)
     end
+
+    -- Prestige token for leveling up
+    addPrestigeTokenOnLevelUp(player:GetAccountId())
+    player:SendBroadcastMessage("|cffFFD700[Prestige] +1 Prestige Token earned for leveling up!|r")
 
     local reward = getRewardForPlayer(player)
     if not reward then
