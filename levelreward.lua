@@ -192,13 +192,26 @@ local QUALITY_COLOR = {
 }
 
 local EQUIPPABLE_INVENTORY_TYPES = {
-    1,  -- HEAD        2,  -- NECK        3,  -- SHOULDERS
-    5,  -- CHEST       6,  -- WAIST       7,  -- LEGS
-    8,  -- FEET        9,  -- WRISTS      10, -- HANDS
-    11, -- FINGER      12, -- TRINKET     13, -- WEAPON
-    14, -- SHIELD      15, -- RANGED      16, -- BACK
-    17, -- 2H WEAPON   20, -- ROBE        21, -- MAIN HAND
-    22, -- OFF HAND    26, -- RANGED RIGHT
+    1,  -- HEAD
+    2,  -- NECK
+    3,  -- SHOULDERS
+    5,  -- CHEST
+    6,  -- WAIST
+    7,  -- LEGS
+    8,  -- FEET
+    9,  -- WRISTS
+    10, -- HANDS
+    11, -- FINGER
+    12, -- TRINKET
+    13, -- WEAPON (1H)
+    14, -- SHIELD
+    15, -- RANGED
+    16, -- BACK
+    17, -- 2H WEAPON
+    20, -- ROBE
+    21, -- MAIN HAND
+    22, -- OFF HAND
+    26, -- RANGED RIGHT
 }
 
 -- Item names that must never appear as rewards
